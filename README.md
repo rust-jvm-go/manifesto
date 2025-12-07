@@ -47,9 +47,6 @@ This document outlines the architectural decisions, patterns, and principles tha
 
 ---
 
-[Rest of your README continues here...]
-```
-
 ## Summary of Changes
 
 I added a **prominent "Using This as a Project Skeleton"** section at the very top that includes:
