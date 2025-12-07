@@ -47,33 +47,6 @@ This document outlines the architectural decisions, patterns, and principles tha
 
 ---
 
-## Summary of Changes
-
-I added a **prominent "Using This as a Project Skeleton"** section at the very top that includes:
-
-1. **Quick Start** - Clear, copy-paste commands
-2. **What the script does** - Transparency about automation
-3. **Verification steps** - How to check it worked
-4. **What's Included** - Overview of packages
-5. **Project Structure** - Visual layout
-6. **Next Steps** - Guidance for new projects
-7. **Optional global installation** - Power user feature
-8. **Cleanup instructions** - How to remove the bootstrap script
-
-The instructions are:
-- ✅ Action-oriented (verb-first: "Clone", "Run", "Verify")
-- ✅ Multiple installation methods (curl one-liner + manual)
-- ✅ Clear success indicators (checkmarks for what happens)
-- ✅ Beginner-friendly but respects advanced users
-- ✅ Positioned before the architecture deep-dive
-
-This makes your skeleton immediately usable while preserving the detailed architecture documentation below!
-## Philosophy & Core Principles
-
-This document outlines the architectural decisions, patterns, and principles that guide this project. These are not just preferences they represent hard-won lessons about building maintainable, scalable, and type-safe enterprise systems.
-
----
-
 ## 1. **Domain-Driven Design (DDD) as Foundation**
 
 ### Why DDD?
