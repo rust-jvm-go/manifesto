@@ -62,10 +62,17 @@ func (k *APIKey) UpdateLastUsed() {
 	k.LastUsedAt = &now
 }
 
-const (
-	KeyPrefixLive = "manifesto_live"
-	KeyPrefixTest = "manifesto_test"
+var (
+	KeyPrefixLive string = "manifesto_live"
+	KeyPrefixTest string = "manifesto_test"
+	TokenLength   int    = 32
 )
+
+func InitAPIKeyConfig(livePrefix, testPrefix string, tokenLength int) {
+	KeyPrefixLive = livePrefix
+	KeyPrefixTest = testPrefix
+	TokenLength = tokenLength
+}
 
 type GeneratedAPIKey struct {
 	Key       string
@@ -74,7 +81,7 @@ type GeneratedAPIKey struct {
 }
 
 func GenerateAPIKey(prefix string) (*GeneratedAPIKey, error) {
-	randomBytes := make([]byte, 32)
+	randomBytes := make([]byte, TokenLength)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, errx.Wrap(err, "failed to generate random key", errx.TypeInternal)
 	}

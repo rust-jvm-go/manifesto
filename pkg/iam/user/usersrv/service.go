@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/Abraxas-365/manifesto/pkg/errx"
-	"github.com/Abraxas-365/manifesto/pkg/iam/auth"
+	"github.com/Abraxas-365/manifesto/pkg/iam/scopes"
 	"github.com/Abraxas-365/manifesto/pkg/iam/tenant"
 	"github.com/Abraxas-365/manifesto/pkg/iam/user"
 	"github.com/Abraxas-365/manifesto/pkg/kernel"
@@ -174,7 +174,7 @@ func (s *UserService) UpdateUser(ctx context.Context, userID kernel.UserID, req 
 
 	// Aplicar scope template si se proporciona
 	if req.ScopeTemplate != nil && *req.ScopeTemplate != "" {
-		scopes := auth.GetScopesByGroup(*req.ScopeTemplate)
+		scopes := scopes.GetScopesByGroup(*req.ScopeTemplate)
 		if len(scopes) == 0 {
 			return nil, user.ErrInvalidScopeTemplate().
 				WithDetail("template", *req.ScopeTemplate).
@@ -308,7 +308,7 @@ func (s *UserService) ApplyScopeTemplateToUser(ctx context.Context, userID kerne
 		return user.ErrUserNotFound()
 	}
 
-	scopes := auth.GetScopesByGroup(templateName)
+	scopes := scopes.GetScopesByGroup(templateName)
 	if len(scopes) == 0 {
 		return user.ErrInvalidScopeTemplate().
 			WithDetail("template", templateName).
@@ -331,8 +331,8 @@ func (s *UserService) GetUserScopes(ctx context.Context, userID kernel.UserID, t
 	for _, scope := range userEntity.Scopes {
 		scopeDetails = append(scopeDetails, user.ScopeDetail{
 			Name:        scope,
-			Description: auth.GetScopeDescription(scope),
-			Category:    auth.GetScopeCategory(scope),
+			Description: scopes.GetScopeDescription(scope),
+			Category:    scopes.GetScopeCategory(scope),
 		})
 	}
 
@@ -369,8 +369,8 @@ func (s *UserService) RevokeUserAdmin(ctx context.Context, userID kernel.UserID,
 
 // GetAvailableScopeTemplates retorna las plantillas de scopes disponibles
 func (s *UserService) GetAvailableScopeTemplates() []string {
-	templates := make([]string, 0, len(auth.ScopeGroups))
-	for template := range auth.ScopeGroups {
+	templates := make([]string, 0, len(scopes.ScopeGroups))
+	for template := range scopes.ScopeGroups {
 		templates = append(templates, template)
 	}
 	return templates
@@ -378,39 +378,39 @@ func (s *UserService) GetAvailableScopeTemplates() []string {
 
 // GetScopeTemplateDetails obtiene los detalles de una plantilla
 func (s *UserService) GetScopeTemplateDetails(templateName string) (*user.ScopeTemplateResponse, error) {
-	scopes := auth.GetScopesByGroup(templateName)
-	if len(scopes) == 0 {
+	scopesl := scopes.GetScopesByGroup(templateName)
+	if len(scopesl) == 0 {
 		return nil, user.ErrInvalidScopeTemplate().WithDetail("template", templateName)
 	}
 
-	scopeDetails := make([]user.ScopeDetail, 0, len(scopes))
-	for _, scope := range scopes {
+	scopeDetails := make([]user.ScopeDetail, 0, len(scopesl))
+	for _, scope := range scopesl {
 		scopeDetails = append(scopeDetails, user.ScopeDetail{
 			Name:        scope,
-			Description: auth.GetScopeDescription(scope),
-			Category:    auth.GetScopeCategory(scope),
+			Description: scopes.GetScopeDescription(scope),
+			Category:    scopes.GetScopeCategory(scope),
 		})
 	}
 
 	return &user.ScopeTemplateResponse{
 		TemplateName: templateName,
-		Scopes:       scopes,
+		Scopes:       scopesl,
 		ScopeDetails: scopeDetails,
-		TotalScopes:  len(scopes),
+		TotalScopes:  len(scopesl),
 	}, nil
 }
 
 // GetAllAvailableScopes retorna todos los scopes disponibles del sistema
 func (s *UserService) GetAllAvailableScopes() *user.AvailableScopesResponse {
-	allScopes := auth.GetAllScopes()
+	allScopes := scopes.GetAllScopes()
 	categories := make(map[string][]user.ScopeDetail)
 
 	// Agrupar por categoría
 	for _, scope := range allScopes {
-		category := auth.GetScopeCategory(scope)
+		category := scopes.GetScopeCategory(scope)
 		scopeDetail := user.ScopeDetail{
 			Name:        scope,
-			Description: auth.GetScopeDescription(scope),
+			Description: scopes.GetScopeDescription(scope),
 			Category:    category,
 		}
 		categories[category] = append(categories[category], scopeDetail)
@@ -436,7 +436,7 @@ func (s *UserService) resolveScopes(req user.CreateUserRequest) ([]string, error
 
 	// Si se proporciona un template, expandirlo
 	if req.ScopeTemplate != nil && *req.ScopeTemplate != "" {
-		scopes := auth.GetScopesByGroup(*req.ScopeTemplate)
+		scopes := scopes.GetScopesByGroup(*req.ScopeTemplate)
 		if len(scopes) == 0 {
 			return nil, user.ErrInvalidScopeTemplate().
 				WithDetail("template", *req.ScopeTemplate).
@@ -446,14 +446,14 @@ func (s *UserService) resolveScopes(req user.CreateUserRequest) ([]string, error
 	}
 
 	// Default: usar template "viewer" o scopes básicos
-	defaultScopes := auth.GetScopesByGroup("viewer")
+	defaultScopes := scopes.GetScopesByGroup("viewer")
 	if len(defaultScopes) == 0 {
 		// Fallback a scopes muy básicos
 		defaultScopes = []string{
-			auth.ScopeUsersRead,
-			auth.ScopeJobsRead,
-			auth.ScopeCandidatesRead,
-			auth.ScopeResumesRead,
+			scopes.ScopeUsersRead,
+			scopes.ScopeJobsRead,
+			scopes.ScopeCandidatesRead,
+			scopes.ScopeResumesRead,
 		}
 	}
 
@@ -461,15 +461,15 @@ func (s *UserService) resolveScopes(req user.CreateUserRequest) ([]string, error
 }
 
 // validateScopes valida que los scopes sean válidos
-func (s *UserService) validateScopes(scopes []string) error {
-	if len(scopes) == 0 {
+func (s *UserService) validateScopes(scopesl []string) error {
+	if len(scopesl) == 0 {
 		return user.ErrInvalidScopes().WithDetail("reason", "at least one scope is required")
 	}
 
 	// Validar cada scope
 	invalidScopes := []string{}
-	for _, scope := range scopes {
-		if !auth.ValidateScope(scope) {
+	for _, scope := range scopesl {
+		if !scopes.ValidateScope(scope) {
 			invalidScopes = append(invalidScopes, scope)
 		}
 	}
@@ -482,4 +482,3 @@ func (s *UserService) validateScopes(scopes []string) error {
 
 	return nil
 }
-

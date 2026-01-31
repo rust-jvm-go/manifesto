@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
+	"github.com/Abraxas-365/manifesto/pkg/config"
 	"github.com/Abraxas-365/manifesto/pkg/errx"
 	"github.com/Abraxas-365/manifesto/pkg/iam"
 )
@@ -19,23 +19,30 @@ const (
 	GoogleUserInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
 )
 
-// GoogleOAuthService implementación del servicio OAuth para Google
+// Update struct to include URLs
 type GoogleOAuthService struct {
 	config       OAuthConfig
 	httpClient   *http.Client
 	stateManager StateManager
+	authURL      string
+	tokenURL     string
+	userInfoURL  string
 }
 
-// NewGoogleOAuthService crea una nueva instancia del servicio Google OAuth
-func NewGoogleOAuthService(config OAuthConfig, stateManager StateManager) *GoogleOAuthService {
-	if len(config.Scopes) == 0 {
-		config.Scopes = []string{"openid", "email", "profile"}
-	}
-
+// GoogleOAuthService implementación del servicio OAuth para Google
+func NewGoogleOAuthServiceFromConfig(cfg *config.OAuthProviderConfig, stateManager StateManager) *GoogleOAuthService {
 	return &GoogleOAuthService{
-		config:       config,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		config: OAuthConfig{
+			ClientID:     cfg.ClientID,
+			ClientSecret: cfg.ClientSecret,
+			RedirectURL:  cfg.RedirectURL,
+			Scopes:       cfg.Scopes,
+		},
+		httpClient:   &http.Client{Timeout: cfg.Timeout},
 		stateManager: stateManager,
+		authURL:      cfg.AuthURL,
+		tokenURL:     cfg.TokenURL,
+		userInfoURL:  cfg.UserInfoURL,
 	}
 }
 

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
+	"github.com/Abraxas-365/manifesto/pkg/config"
 	"github.com/Abraxas-365/manifesto/pkg/errx"
 	"github.com/Abraxas-365/manifesto/pkg/iam"
 )
@@ -24,18 +24,25 @@ type MicrosoftOAuthService struct {
 	config       OAuthConfig
 	httpClient   *http.Client
 	stateManager StateManager
+	authURL      string
+	tokenURL     string
+	userInfoURL  string
 }
 
 // NewMicrosoftOAuthService crea una nueva instancia del servicio Microsoft OAuth
-func NewMicrosoftOAuthService(config OAuthConfig, stateManager StateManager) *MicrosoftOAuthService {
-	if len(config.Scopes) == 0 {
-		config.Scopes = []string{"openid", "email", "profile", "User.Read"}
-	}
-
+func NewMicrosoftOAuthServiceFromConfig(cfg *config.OAuthProviderConfig, stateManager StateManager) *MicrosoftOAuthService {
 	return &MicrosoftOAuthService{
-		config:       config,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		config: OAuthConfig{
+			ClientID:     cfg.ClientID,
+			ClientSecret: cfg.ClientSecret,
+			RedirectURL:  cfg.RedirectURL,
+			Scopes:       cfg.Scopes,
+		},
+		httpClient:   &http.Client{Timeout: cfg.Timeout},
 		stateManager: stateManager,
+		authURL:      cfg.AuthURL,
+		tokenURL:     cfg.TokenURL,
+		userInfoURL:  cfg.UserInfoURL,
 	}
 }
 

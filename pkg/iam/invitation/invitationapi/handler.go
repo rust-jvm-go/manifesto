@@ -21,21 +21,21 @@ func NewInvitationHandlers(service *invitationsrv.InvitationService) *Invitation
 }
 
 // RegisterRoutes registra las rutas de invitaciones en Fiber
-func (h *InvitationHandlers) RegisterRoutes(app *fiber.App, authMiddleware *auth.UnifiedAuthMiddleware) {
-	invitations := app.Group("/invitations", authMiddleware.Authenticate())
+func (h *InvitationHandlers) RegisterRoutes(router fiber.Router, authMiddleware *auth.UnifiedAuthMiddleware) {
+	invitations := router.Group("/invitations", authMiddleware.Authenticate())
 
-	// Rutas protegidas (requieren autenticación)
-	invitations.Post("/", h.CreateInvitation)            // Crear invitación
-	invitations.Get("/", h.GetTenantInvitations)         // Listar invitaciones del tenant
-	invitations.Get("/pending", h.GetPendingInvitations) // Listar invitaciones pendientes
-	invitations.Get("/:id", h.GetInvitationByID)         // Obtener invitación por ID
-	invitations.Delete("/:id", h.DeleteInvitation)       // Eliminar invitación
-	invitations.Post("/:id/revoke", h.RevokeInvitation)  // Revocar invitación
+	// Protected routes
+	invitations.Post("/", h.CreateInvitation)
+	invitations.Get("/", h.GetTenantInvitations)
+	invitations.Get("/pending", h.GetPendingInvitations)
+	invitations.Get("/:id", h.GetInvitationByID)
+	invitations.Delete("/:id", h.DeleteInvitation)
+	invitations.Post("/:id/revoke", h.RevokeInvitation)
 
-	// Rutas públicas (no requieren autenticación)
-	public := app.Group("/invitations/public")
-	public.Get("/validate", h.ValidateInvitationToken)  // Validar token
-	public.Get("/token/:token", h.GetInvitationByToken) // Obtener invitación por token
+	// Public routes
+	public := router.Group("/invitations/public")
+	public.Get("/validate", h.ValidateInvitationToken)
+	public.Get("/token/:token", h.GetInvitationByToken)
 }
 
 // CreateInvitation crea una nueva invitación

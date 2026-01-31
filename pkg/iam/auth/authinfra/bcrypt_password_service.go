@@ -11,9 +11,12 @@ type BcryptPasswordService struct {
 }
 
 // NewBcryptPasswordService crea una nueva instancia del servicio de contraseñas
-func NewBcryptPasswordService() user.PasswordService {
+func NewBcryptPasswordService(cost int) user.PasswordService {
+	if cost == 0 {
+		cost = bcrypt.DefaultCost
+	}
 	return &BcryptPasswordService{
-		cost: bcrypt.DefaultCost,
+		cost: cost,
 	}
 }
 

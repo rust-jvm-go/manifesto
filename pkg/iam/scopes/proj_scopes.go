@@ -1,4 +1,4 @@
-package auth
+package scopes
 
 // ============================================================================
 // DOMAIN-SPECIFIC SCOPES - ATS (Applicant Tracking System)

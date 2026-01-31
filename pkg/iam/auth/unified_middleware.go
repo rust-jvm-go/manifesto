@@ -6,6 +6,7 @@ import (
 	"github.com/Abraxas-365/manifesto/pkg/iam"
 	"github.com/Abraxas-365/manifesto/pkg/iam/apikey"
 	"github.com/Abraxas-365/manifesto/pkg/iam/apikey/apikeysrv"
+	"github.com/Abraxas-365/manifesto/pkg/iam/scopes"
 	"github.com/Abraxas-365/manifesto/pkg/kernel"
 	"github.com/gofiber/fiber/v2"
 )
@@ -121,12 +122,12 @@ func (am *UnifiedAuthMiddleware) RequireScope(scope string) fiber.Handler {
 
 // RequireAdmin - Only admin users (users/API keys with "*" or "admin:*" scope)
 func (am *UnifiedAuthMiddleware) RequireAdmin() fiber.Handler {
-	return am.RequireAnyScope(ScopeAll, ScopeAdminAll)
+	return am.RequireAnyScope(scopes.ScopeAll, scopes.ScopeAdminAll)
 }
 
 // RequireAdminOrScope - Admin OR specific scope
 func (am *UnifiedAuthMiddleware) RequireAdminOrScope(scope string) fiber.Handler {
-	return am.RequireAnyScope(ScopeAll, ScopeAdminAll, scope)
+	return am.RequireAnyScope(scopes.ScopeAll, scopes.ScopeAdminAll, scope)
 }
 
 // RequireAnyScope - Requires any of the provided scopes (works for both JWT and API keys)

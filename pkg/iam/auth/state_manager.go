@@ -13,6 +13,7 @@ import (
 type InMemoryStateManager struct {
 	states map[string]*stateEntry
 	mu     sync.RWMutex
+	ttl    time.Duration // Add this field
 }
 
 type stateEntry struct {
@@ -21,15 +22,11 @@ type stateEntry struct {
 }
 
 // NewInMemoryStateManager crea un nuevo state manager en memoria
-func NewInMemoryStateManager() *InMemoryStateManager {
-	sm := &InMemoryStateManager{
+func NewInMemoryStateManager(ttl time.Duration) *InMemoryStateManager {
+	return &InMemoryStateManager{
 		states: make(map[string]*stateEntry),
+		ttl:    ttl,
 	}
-
-	// Cleanup goroutine para estados expirados
-	go sm.cleanup()
-
-	return sm
 }
 
 // GenerateState genera un nuevo estado OAuth
@@ -49,7 +46,7 @@ func (sm *InMemoryStateManager) StoreState(ctx context.Context, state string, da
 
 	sm.states[state] = &stateEntry{
 		data:      data,
-		expiresAt: time.Now().Add(10 * time.Minute), // Estados válidos por 10 minutos
+		expiresAt: time.Now().Add(sm.ttl), // Estados válidos por 10 minutos
 	}
 
 	return nil

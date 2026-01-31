@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Abraxas-365/manifesto/pkg/config"
 	"github.com/Abraxas-365/manifesto/pkg/errx"
 	"github.com/Abraxas-365/manifesto/pkg/iam/tenant"
 	"github.com/Abraxas-365/manifesto/pkg/iam/user"
@@ -16,6 +17,7 @@ type TenantService struct {
 	tenantRepo       tenant.TenantRepository
 	tenantConfigRepo tenant.TenantConfigRepository
 	userRepo         user.UserRepository
+	config           *config.TenantConfig
 }
 
 // NewTenantService crea una nueva instancia del servicio de tenants
@@ -23,11 +25,13 @@ func NewTenantService(
 	tenantRepo tenant.TenantRepository,
 	tenantConfigRepo tenant.TenantConfigRepository,
 	userRepo user.UserRepository,
+	config *config.TenantConfig,
 ) *TenantService {
 	return &TenantService{
 		tenantRepo:       tenantRepo,
 		tenantConfigRepo: tenantConfigRepo,
 		userRepo:         userRepo,
+		config:           config,
 	}
 }
 
@@ -404,11 +408,11 @@ func (s *TenantService) getMaxUsersForPlan(plan tenant.SubscriptionPlan) int {
 }
 
 func (s *TenantService) calculateTrialExpiration() *time.Time {
-	expiration := time.Now().AddDate(0, 0, 30) // 30 días de trial
+	expiration := time.Now().AddDate(0, 0, s.config.TrialDays)
 	return &expiration
 }
 
 func (s *TenantService) calculateSubscriptionExpiration() *time.Time {
-	expiration := time.Now().AddDate(1, 0, 0) // 1 año
+	expiration := time.Now().AddDate(s.config.SubscriptionYears, 0, 0)
 	return &expiration
 }

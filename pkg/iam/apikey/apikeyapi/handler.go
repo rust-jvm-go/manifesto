@@ -16,8 +16,8 @@ func NewAPIKeyHandlers(service *apikeysrv.APIKeyService) *APIKeyHandlers {
 	return &APIKeyHandlers{service: service}
 }
 
-func (h *APIKeyHandlers) RegisterRoutes(app *fiber.App, authMiddleware *auth.UnifiedAuthMiddleware) {
-	keys := app.Group("/api-keys", authMiddleware.Authenticate())
+func (h *APIKeyHandlers) RegisterRoutes(router fiber.Router, authMiddleware *auth.UnifiedAuthMiddleware) {
+	keys := router.Group("/api-keys", authMiddleware.Authenticate())
 
 	keys.Post("/", h.CreateAPIKey)
 	keys.Get("/", h.GetTenantAPIKeys)

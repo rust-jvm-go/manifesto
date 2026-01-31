@@ -18,10 +18,10 @@ type RedisStateManager struct {
 }
 
 // NewRedisStateManager crea un nuevo state manager con Redis
-func NewRedisStateManager(client *redis.Client) auth.StateManager {
+func NewRedisStateManager(client *redis.Client, ttl time.Duration) auth.StateManager {
 	return &RedisStateManager{
 		client: client,
-		ttl:    10 * time.Minute, // Estados válidos por 10 minutos
+		ttl:    ttl,
 	}
 }
 

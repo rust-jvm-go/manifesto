@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Abraxas-365/manifesto/pkg/config"
 	"github.com/Abraxas-365/manifesto/pkg/kernel"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -14,25 +15,17 @@ type JWTService struct {
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
 	issuer          string
+	audience        []string
 }
 
 // NewJWTService crea una nueva instancia del servicio JWT
-func NewJWTService(secretKey string, accessTokenTTL, refreshTokenTTL time.Duration, issuer string) *JWTService {
-	if accessTokenTTL == 0 {
-		accessTokenTTL = 15 * time.Minute // Por defecto 15 minutos
-	}
-	if refreshTokenTTL == 0 {
-		refreshTokenTTL = 7 * 24 * time.Hour // Por defecto 7 días
-	}
-	if issuer == "" {
-		issuer = "facturamelo"
-	}
-
+func NewJWTServiceFromConfig(cfg *config.JWTConfig) *JWTService {
 	return &JWTService{
-		secretKey:       []byte(secretKey),
-		accessTokenTTL:  accessTokenTTL,
-		refreshTokenTTL: refreshTokenTTL,
-		issuer:          issuer,
+		secretKey:       []byte(cfg.SecretKey),
+		accessTokenTTL:  cfg.AccessTokenTTL,
+		refreshTokenTTL: cfg.RefreshTokenTTL,
+		issuer:          cfg.Issuer,
+		audience:        cfg.Audience,
 	}
 }
 
@@ -69,7 +62,7 @@ func (j *JWTService) GenerateAccessToken(userID kernel.UserID, tenantID kernel.T
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    j.issuer,
 			Subject:   userID.String(),
-			Audience:  []string{"facturamelo-api"},
+			Audience:  j.audience,
 			ExpiresAt: jwt.NewNumericDate(now.Add(j.accessTokenTTL)),
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -127,7 +120,7 @@ func (j *JWTService) GenerateRefreshToken(userID kernel.UserID) (string, error) 
 	claims := jwt.RegisteredClaims{
 		Issuer:    j.issuer,
 		Subject:   userID.String(),
-		Audience:  []string{"facturamelo-refresh"},
+		Audience:  j.audience,
 		ExpiresAt: jwt.NewNumericDate(now.Add(j.refreshTokenTTL)),
 		NotBefore: jwt.NewNumericDate(now),
 		IssuedAt:  jwt.NewNumericDate(now),

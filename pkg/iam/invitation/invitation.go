@@ -253,18 +253,17 @@ type ValidateInvitationResponse struct {
 // ============================================================================
 
 // GenerateInvitationToken genera un token único para la invitación
-func GenerateInvitationToken() (string, error) {
-	bytes := make([]byte, 32) // 256 bits
+func GenerateInvitationToken(byteLength int) (string, error) {
+	bytes := make([]byte, byteLength)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", errx.Wrap(err, "failed to generate invitation token", errx.TypeInternal)
 	}
 	return hex.EncodeToString(bytes), nil
 }
 
-// CalculateExpirationDate calcula la fecha de expiración
-func CalculateExpirationDate(daysFromNow int) time.Time {
+func CalculateExpirationDate(daysFromNow int, defaultDays int) time.Time {
 	if daysFromNow <= 0 {
-		daysFromNow = 7 // Default: 7 días
+		daysFromNow = defaultDays
 	}
 	return time.Now().AddDate(0, 0, daysFromNow)
 }

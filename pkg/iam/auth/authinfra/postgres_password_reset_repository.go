@@ -137,7 +137,7 @@ func (r *PostgresPasswordResetRepository) HasRecentResetToken(ctx context.Contex
 			SELECT 1 
 			FROM password_reset_tokens 
 			WHERE user_id = $1 
-			AND created_at > NOW() - INTERVAL '%d minutes'
+			AND created_at > NOW() - make_interval(mins => $2)
 			AND is_used = false
 		)`
 

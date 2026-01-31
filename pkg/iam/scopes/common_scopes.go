@@ -1,5 +1,4 @@
-// pkg/iam/auth/scopes_common.go
-package auth
+package scopes
 
 // ============================================================================
 // COMMON SCOPES - Reusable across any project

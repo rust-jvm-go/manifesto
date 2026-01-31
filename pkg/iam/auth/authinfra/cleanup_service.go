@@ -21,12 +21,13 @@ func NewCleanupService(
 	tokenRepo auth.TokenRepository,
 	sessionRepo auth.SessionRepository,
 	passwordResetRepo auth.PasswordResetRepository,
+	interval time.Duration,
 ) *CleanupService {
 	return &CleanupService{
 		tokenRepo:         tokenRepo,
 		sessionRepo:       sessionRepo,
 		passwordResetRepo: passwordResetRepo,
-		interval:          1 * time.Hour, // Ejecutar cada hora
+		interval:          interval,
 	}
 }
 

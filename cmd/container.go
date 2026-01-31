@@ -1,15 +1,17 @@
+// container.go
 package main
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
+	"github.com/Abraxas-365/manifesto/pkg/config"
 	"github.com/Abraxas-365/manifesto/pkg/fsx"
 	"github.com/Abraxas-365/manifesto/pkg/fsx/fsxlocal"
 	"github.com/Abraxas-365/manifesto/pkg/fsx/fsxs3"
 	"github.com/Abraxas-365/manifesto/pkg/iam"
+	"github.com/Abraxas-365/manifesto/pkg/iam/apikey"
 	"github.com/Abraxas-365/manifesto/pkg/iam/apikey/apikeyapi"
 	"github.com/Abraxas-365/manifesto/pkg/iam/apikey/apikeyinfra"
 	"github.com/Abraxas-365/manifesto/pkg/iam/apikey/apikeysrv"
@@ -25,7 +27,7 @@ import (
 	"github.com/Abraxas-365/manifesto/pkg/iam/user/userinfra"
 	"github.com/Abraxas-365/manifesto/pkg/iam/user/usersrv"
 	"github.com/Abraxas-365/manifesto/pkg/logx"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -35,7 +37,7 @@ import (
 // Container holds all application dependencies
 type Container struct {
 	// Config
-	AuthConfig auth.Config
+	Config *config.Config
 
 	// Infrastructure
 	DB         *sqlx.DB
@@ -59,13 +61,19 @@ type Container struct {
 	// Middleware
 	UnifiedAuthMiddleware *auth.UnifiedAuthMiddleware
 	AuthMiddleware        *auth.TokenMiddleware
+
+	// Background Services
+	CleanupService *authinfra.CleanupService
 }
 
 // NewContainer initializes the dependency injection container
-func NewContainer() *Container {
+func NewContainer(cfg *config.Config) *Container {
 	logx.Info("🔧 Initializing dependency container...")
 
-	c := &Container{}
+	c := &Container{
+		Config: cfg,
+	}
+
 	c.initInfrastructure()
 	c.initRepositories()
 
@@ -77,32 +85,30 @@ func (c *Container) initInfrastructure() {
 	logx.Info("🏗️ Initializing infrastructure...")
 
 	// 1. Database Connection
-	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "5432")
-	dbUser := getEnv("DB_USER", "postgres")
-	dbPass := getEnv("DB_PASS", "postgres")
-	dbName := getEnv("DB_NAME", "manifesto")
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Config.Database.Host,
+		c.Config.Database.Port,
+		c.Config.Database.User,
+		c.Config.Database.Password,
+		c.Config.Database.Name,
+		c.Config.Database.SSLMode,
+	)
 
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		logx.Fatalf("Failed to connect to database: %v", err)
 	}
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetMaxOpenConns(c.Config.Database.MaxOpenConns)
+	db.SetMaxIdleConns(c.Config.Database.MaxIdleConns)
+	db.SetConnMaxLifetime(c.Config.Database.ConnMaxLifetime)
 	c.DB = db
 	logx.Info("✅ Database connected")
 
 	// 2. Redis Connection
-	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
-	redisPass := getEnv("REDIS_PASS", "")
-	redisDB := getEnvInt("REDIS_DB", 0)
 	c.Redis = redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: redisPass,
-		DB:       redisDB,
+		Addr:     c.Config.Redis.Address(),
+		Password: c.Config.Redis.Password,
+		DB:       c.Config.Redis.DB,
 	})
 	if _, err := c.Redis.Ping(context.Background()).Result(); err != nil {
 		logx.Fatalf("Failed to connect to Redis: %v (Redis is required for job queue)", err)
@@ -111,14 +117,21 @@ func (c *Container) initInfrastructure() {
 	}
 
 	// 3. File Storage Configuration (Local or S3)
+	c.initFileStorage()
+
+	logx.Info("✅ Infrastructure initialized")
+}
+
+func (c *Container) initFileStorage() {
 	storageMode := getEnv("STORAGE_MODE", "local") // "local" or "s3"
 
 	switch storageMode {
 	case "s3":
 		// AWS S3 Configuration
-		awsRegion := getEnv("AWS_REGION", "us-east-1")
+		awsRegion := getEnv("AWS_REGION", c.Config.Email.AWSRegion)
 		awsBucket := getEnv("AWS_BUCKET", "manifesto-uploads")
-		cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(awsRegion))
+
+		cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(awsRegion))
 		if err != nil {
 			logx.Fatalf("Unable to load AWS SDK config: %v", err)
 		}
@@ -139,19 +152,6 @@ func (c *Container) initInfrastructure() {
 	default:
 		logx.Fatalf("Unknown STORAGE_MODE: %s (use 'local' or 's3')", storageMode)
 	}
-
-	// 4. Auth Config
-	c.AuthConfig = auth.DefaultConfig()
-	c.AuthConfig.JWT.SecretKey = getEnv("JWT_SECRET", "")
-	if c.AuthConfig.JWT.SecretKey == "" {
-		logx.Warn("⚠️  JWT_SECRET is not set, using default (UNSAFE for production)")
-		c.AuthConfig.JWT.SecretKey = "super-secret-key-please-change-me-in-production"
-	}
-
-	// OAuth Configs
-	c.AuthConfig.OAuth.Google.ClientID = getEnv("GOOGLE_CLIENT_ID", "")
-	c.AuthConfig.OAuth.Google.ClientSecret = getEnv("GOOGLE_CLIENT_SECRET", "")
-	c.AuthConfig.OAuth.Google.RedirectURL = getEnv("GOOGLE_REDIRECT_URL", "")
 }
 
 func (c *Container) initRepositories() {
@@ -163,33 +163,88 @@ func (c *Container) initRepositories() {
 	userRepo := userinfra.NewPostgresUserRepository(c.DB)
 	tokenRepo := authinfra.NewPostgresTokenRepository(c.DB)
 	sessionRepo := authinfra.NewPostgresSessionRepository(c.DB)
+	passwordResetRepo := authinfra.NewPostgresPasswordResetRepository(c.DB)
 	invitationRepo := invitationinfra.NewPostgresInvitationRepository(c.DB)
 	apiKeyRepo := apikeyinfra.NewPostgresAPIKeyRepository(c.DB)
 	otpRepo := otpinfra.NewPostgresOTPRepository(c.DB)
 
 	// --- Infrastructure Services ---
-	stateManager := authinfra.NewRedisStateManager(c.Redis)
-	passwordSvc := authinfra.NewBcryptPasswordService()
+
+	// State Manager (use Redis in production, memory in dev)
+	var stateManager auth.StateManager
+	if c.Config.OAuth.StateManager.Type == "redis" {
+		stateManager = authinfra.NewRedisStateManager(c.Redis, c.Config.OAuth.StateManager.TTL)
+		logx.Info("✅ Using Redis state manager for OAuth")
+	} else {
+		stateManager = auth.NewInMemoryStateManager(c.Config.OAuth.StateManager.TTL)
+		logx.Warn("⚠️  Using in-memory state manager (not recommended for production)")
+	}
+
+	// Password Service
+	passwordSvc := authinfra.NewBcryptPasswordService(c.Config.Auth.Password.BcryptCost)
 
 	// Token Service
-	c.TokenService = auth.NewJWTService(
-		c.AuthConfig.JWT.SecretKey,
-		c.AuthConfig.JWT.AccessTokenTTL,
-		c.AuthConfig.JWT.RefreshTokenTTL,
-		c.AuthConfig.JWT.Issuer,
+	c.TokenService = auth.NewJWTServiceFromConfig(&c.Config.Auth.JWT)
+
+	// Initialize API Key configuration
+	apikey.InitAPIKeyConfig(
+		c.Config.Auth.APIKey.LivePrefix,
+		c.Config.Auth.APIKey.TestPrefix,
+		c.Config.Auth.APIKey.TokenLength,
 	)
 
 	// --- IAM Domain Services ---
-	c.TenantService = tenantsrv.NewTenantService(tenantRepo, tenantConfigRepo, userRepo)
-	c.UserService = usersrv.NewUserService(userRepo, tenantRepo, passwordSvc)
-	c.InvitationService = invitationsrv.NewInvitationService(invitationRepo, userRepo, tenantRepo)
-	c.APIKeyService = apikeysrv.NewAPIKeyService(apiKeyRepo, tenantRepo, userRepo)
-	c.OTPService = otpsrv.NewOTPService(otpRepo, NewConsoleNotifier())
+	c.TenantService = tenantsrv.NewTenantService(
+		tenantRepo,
+		tenantConfigRepo,
+		userRepo,
+		&c.Config.TenantConfig,
+	)
 
-	// OAuth Services Map
-	oauthServices := map[iam.OAuthProvider]auth.OAuthService{
-		iam.OAuthProviderGoogle: auth.NewGoogleOAuthService(c.AuthConfig.OAuth.Google, stateManager),
-		// Add Microsoft if configured
+	c.UserService = usersrv.NewUserService(
+		userRepo,
+		tenantRepo,
+		passwordSvc,
+	)
+
+	c.InvitationService = invitationsrv.NewInvitationService(
+		invitationRepo,
+		userRepo,
+		tenantRepo,
+		&c.Config.Auth.Invitation,
+	)
+
+	c.APIKeyService = apikeysrv.NewAPIKeyService(
+		apiKeyRepo,
+		tenantRepo,
+		userRepo,
+	)
+
+	c.OTPService = otpsrv.NewOTPService(
+		otpRepo,
+		NewConsoleNotifier(),
+		&c.Config.Auth.OTP,
+	)
+
+	// --- OAuth Services Map ---
+	oauthServices := make(map[iam.OAuthProvider]auth.OAuthService)
+
+	// Google OAuth (if enabled)
+	if c.Config.OAuth.Google.Enabled {
+		oauthServices[iam.OAuthProviderGoogle] = auth.NewGoogleOAuthServiceFromConfig(
+			&c.Config.OAuth.Google,
+			stateManager,
+		)
+		logx.Info("✅ Google OAuth enabled")
+	}
+
+	// Microsoft OAuth (if enabled)
+	if c.Config.OAuth.Microsoft.Enabled {
+		oauthServices[iam.OAuthProviderMicrosoft] = auth.NewMicrosoftOAuthServiceFromConfig(
+			&c.Config.OAuth.Microsoft,
+			stateManager,
+		)
+		logx.Info("✅ Microsoft OAuth enabled")
 	}
 
 	// Auth Handler (Core Logic)
@@ -202,6 +257,7 @@ func (c *Container) initRepositories() {
 		sessionRepo,
 		stateManager,
 		invitationRepo,
+		c.Config,
 	)
 
 	// --- API Handlers ---
@@ -212,7 +268,24 @@ func (c *Container) initRepositories() {
 	c.AuthMiddleware = auth.NewAuthMiddleware(c.TokenService)
 	c.UnifiedAuthMiddleware = auth.NewAPIKeyMiddleware(c.APIKeyService, c.TokenService)
 
+	// --- Background Services ---
+	c.CleanupService = authinfra.NewCleanupService(
+		tokenRepo,
+		sessionRepo,
+		passwordResetRepo,
+		c.Config.Auth.Session.CleanupInterval,
+	)
+
 	logx.Info("✅ All services and handlers initialized")
+}
+
+// StartBackgroundServices starts background workers
+func (c *Container) StartBackgroundServices(ctx context.Context) {
+	logx.Info("🔄 Starting background services...")
+
+	// Start cleanup service
+	go c.CleanupService.Start(ctx)
+	logx.Info("✅ Cleanup service started")
 }
 
 // Cleanup closes all connections and stops workers
@@ -245,27 +318,14 @@ func (c *Container) Cleanup() {
 // ============================================================================
 
 // getEnv gets an environment variable with a default value
+// Note: Most config should come from config package now
+// This is kept for storage-specific overrides
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value == "" {
 		return defaultValue
 	}
 	return value
-}
-
-// getEnvInt gets an environment variable as int with a default value
-func getEnvInt(key string, defaultValue int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-
-	var intValue int
-	if _, err := fmt.Sscanf(value, "%d", &intValue); err != nil {
-		logx.Warnf("Invalid integer value for %s: %s, using default: %d", key, value, defaultValue)
-		return defaultValue
-	}
-	return intValue
 }
 
 // ============================================================================

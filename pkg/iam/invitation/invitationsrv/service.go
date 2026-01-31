@@ -1,12 +1,14 @@
+// pkg/iam/invitation/invitationsrv/service.go
 package invitationsrv
 
 import (
 	"context"
 	"time"
 
+	"github.com/Abraxas-365/manifesto/pkg/config"
 	"github.com/Abraxas-365/manifesto/pkg/errx"
-	"github.com/Abraxas-365/manifesto/pkg/iam/auth"
 	"github.com/Abraxas-365/manifesto/pkg/iam/invitation"
+	"github.com/Abraxas-365/manifesto/pkg/iam/scopes"
 	"github.com/Abraxas-365/manifesto/pkg/iam/tenant"
 	"github.com/Abraxas-365/manifesto/pkg/iam/user"
 	"github.com/Abraxas-365/manifesto/pkg/kernel"
@@ -18,6 +20,7 @@ type InvitationService struct {
 	invitationRepo invitation.InvitationRepository
 	userRepo       user.UserRepository
 	tenantRepo     tenant.TenantRepository
+	config         *config.InvitationConfig
 }
 
 // NewInvitationService crea una nueva instancia del servicio de invitaciones
@@ -25,11 +28,13 @@ func NewInvitationService(
 	invitationRepo invitation.InvitationRepository,
 	userRepo user.UserRepository,
 	tenantRepo tenant.TenantRepository,
+	cfg *config.InvitationConfig,
 ) *InvitationService {
 	return &InvitationService{
 		invitationRepo: invitationRepo,
 		userRepo:       userRepo,
 		tenantRepo:     tenantRepo,
+		config:         cfg,
 	}
 }
 
@@ -53,9 +58,9 @@ func (s *InvitationService) CreateInvitation(ctx context.Context, tenantID kerne
 	}
 
 	// Verificar que el invitador tiene permisos (admin o users:invite)
-	if !inviterUser.IsAdmin() && !inviterUser.HasScope(auth.ScopeUsersInvite) {
+	if !inviterUser.IsAdmin() && !inviterUser.HasScope(scopes.ScopeUsersInvite) {
 		return nil, errx.New("insufficient permissions to invite users", errx.TypeAuthorization).
-			WithDetail("required_scope", auth.ScopeUsersInvite)
+			WithDetail("required_scope", scopes.ScopeUsersInvite)
 	}
 
 	// Verificar que el usuario no existe ya en el tenant
@@ -74,28 +79,28 @@ func (s *InvitationService) CreateInvitation(ctx context.Context, tenantID kerne
 	}
 
 	// Determinar scopes
-	scopes, err := s.resolveScopes(req)
+	resolvedScopes, err := s.resolveScopes(req)
 	if err != nil {
 		return nil, err
 	}
 
 	// Validar scopes
-	if err := s.validateScopes(scopes); err != nil {
+	if err := s.validateScopes(resolvedScopes); err != nil {
 		return nil, err
 	}
 
-	// Generar token único
-	token, err := invitation.GenerateInvitationToken()
+	// Generar token único usando configuración
+	token, err := invitation.GenerateInvitationToken(s.config.TokenByteLength)
 	if err != nil {
 		return nil, errx.Wrap(err, "failed to generate invitation token", errx.TypeInternal)
 	}
 
-	// Calcular fecha de expiración
-	expiresIn := 7 // Default: 7 días
+	// Calcular fecha de expiración usando configuración
+	expiresIn := s.config.DefaultExpirationDays
 	if req.ExpiresIn != nil && *req.ExpiresIn > 0 {
 		expiresIn = *req.ExpiresIn
 	}
-	expiresAt := invitation.CalculateExpirationDate(expiresIn)
+	expiresAt := invitation.CalculateExpirationDate(expiresIn, s.config.DefaultExpirationDays)
 
 	// Crear invitación
 	newInvitation := &invitation.Invitation{
@@ -103,7 +108,7 @@ func (s *InvitationService) CreateInvitation(ctx context.Context, tenantID kerne
 		TenantID:  tenantID,
 		Email:     req.Email,
 		Token:     token,
-		Scopes:    scopes,
+		Scopes:    resolvedScopes,
 		Status:    invitation.InvitationStatusPending,
 		InvitedBy: invitedBy,
 		ExpiresAt: expiresAt,
@@ -293,8 +298,8 @@ func (s *InvitationService) CleanupExpiredInvitations(ctx context.Context) (int,
 
 // GetAvailableScopeTemplates retorna las plantillas de scopes disponibles
 func (s *InvitationService) GetAvailableScopeTemplates() []string {
-	templates := make([]string, 0, len(auth.ScopeGroups))
-	for template := range auth.ScopeGroups {
+	templates := make([]string, 0, len(scopes.ScopeGroups))
+	for template := range scopes.ScopeGroups {
 		templates = append(templates, template)
 	}
 	return templates
@@ -313,23 +318,23 @@ func (s *InvitationService) resolveScopes(req invitation.CreateInvitationRequest
 
 	// Si se proporciona un template, expandirlo
 	if req.ScopeTemplate != nil && *req.ScopeTemplate != "" {
-		scopes := auth.GetScopesByGroup(*req.ScopeTemplate)
-		if len(scopes) == 0 {
+		scopeList := scopes.GetScopesByGroup(*req.ScopeTemplate)
+		if len(scopeList) == 0 {
 			return nil, invitation.ErrInvalidScopeTemplate().
 				WithDetail("template", *req.ScopeTemplate).
 				WithDetail("available_templates", s.GetAvailableScopeTemplates())
 		}
-		return scopes, nil
+		return scopeList, nil
 	}
 
 	// Default: usar template "viewer" o scopes básicos
-	defaultScopes := auth.GetScopesByGroup("viewer")
+	defaultScopes := scopes.GetScopesByGroup("viewer")
 	if len(defaultScopes) == 0 {
 		// Fallback a scopes muy básicos
 		defaultScopes = []string{
-			auth.ScopeUsersRead,
-			auth.ScopeJobsRead,
-			auth.ScopeCandidatesRead,
+			scopes.ScopeUsersRead,
+			scopes.ScopeJobsRead,
+			scopes.ScopeCandidatesRead,
 		}
 	}
 
@@ -337,15 +342,15 @@ func (s *InvitationService) resolveScopes(req invitation.CreateInvitationRequest
 }
 
 // validateScopes valida que los scopes sean válidos
-func (s *InvitationService) validateScopes(scopes []string) error {
-	if len(scopes) == 0 {
+func (s *InvitationService) validateScopes(scopesList []string) error {
+	if len(scopesList) == 0 {
 		return invitation.ErrInvalidScopes().WithDetail("reason", "at least one scope is required")
 	}
 
 	// Validar cada scope
 	invalidScopes := []string{}
-	for _, scope := range scopes {
-		if !auth.ValidateScope(scope) {
+	for _, scope := range scopesList {
+		if !scopes.ValidateScope(scope) {
 			invalidScopes = append(invalidScopes, scope)
 		}
 	}
@@ -366,4 +371,3 @@ func (s *InvitationService) buildInvitationResponse(inv *invitation.Invitation) 
 		ScopeTemplates: s.GetAvailableScopeTemplates(),
 	}
 }
-
