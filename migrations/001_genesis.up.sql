@@ -300,3 +300,6 @@ UPDATE users SET otp_enabled = FALSE WHERE oauth_provider IS NOT NULL AND oauth_
 -- Update existing users to enable backwards compatibility
 UPDATE users SET otp_enabled = TRUE WHERE oauth_provider IS NULL OR oauth_provider = '';
 
+-- Remove the restrictive constraint
+ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_oauth_provider;
+
