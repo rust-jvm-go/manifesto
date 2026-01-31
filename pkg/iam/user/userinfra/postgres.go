@@ -28,7 +28,7 @@ func (r *PostgresUserRepository) FindByID(ctx context.Context, id kernel.UserID,
 	query := `
 		SELECT
 			id, tenant_id, email, name, picture, status, scopes,
-			oauth_provider, oauth_provider_id, email_verified,
+			oauth_provider, oauth_provider_id, email_verified, otp_enabled,
 			last_login_at, created_at, updated_at
 		FROM users
 		WHERE id = $1 AND tenant_id = $2`
@@ -52,7 +52,7 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string, 
 	query := `
 		SELECT
 			id, tenant_id, email, name, picture, status, scopes,
-			oauth_provider, oauth_provider_id, email_verified,
+			oauth_provider, oauth_provider_id, email_verified, otp_enabled,
 			last_login_at, created_at, updated_at
 		FROM users
 		WHERE email = $1 AND tenant_id = $2`
@@ -71,12 +71,39 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string, 
 	return &u, nil
 }
 
+// FindByEmailAcrossTenants finds all users with this email across all tenants
+func (r *PostgresUserRepository) FindByEmailAcrossTenants(ctx context.Context, email string) ([]*user.User, error) {
+	query := `
+		SELECT
+			id, tenant_id, email, name, picture, status, scopes,
+			oauth_provider, oauth_provider_id, email_verified, otp_enabled,
+			last_login_at, created_at, updated_at
+		FROM users
+		WHERE email = $1
+		ORDER BY created_at DESC`
+
+	var users []user.User
+	err := r.db.SelectContext(ctx, &users, query, email)
+	if err != nil {
+		return nil, errx.Wrap(err, "failed to find users by email across tenants", errx.TypeInternal).
+			WithDetail("email", email)
+	}
+
+	// Convert to slice of pointers
+	result := make([]*user.User, len(users))
+	for i := range users {
+		result[i] = &users[i]
+	}
+
+	return result, nil
+}
+
 // FindByTenant busca todos los usuarios de un tenant
 func (r *PostgresUserRepository) FindByTenant(ctx context.Context, tenantID kernel.TenantID) ([]*user.User, error) {
 	query := `
 		SELECT
 			id, tenant_id, email, name, picture, status, scopes,
-			oauth_provider, oauth_provider_id, email_verified,
+			oauth_provider, oauth_provider_id, email_verified, otp_enabled,
 			last_login_at, created_at, updated_at
 		FROM users
 		WHERE tenant_id = $1
@@ -117,11 +144,11 @@ func (r *PostgresUserRepository) create(ctx context.Context, u user.User) error 
 	query := `
 		INSERT INTO users (
 			id, tenant_id, email, name, picture, status, scopes,
-			oauth_provider, oauth_provider_id, email_verified,
+			oauth_provider, oauth_provider_id, email_verified, otp_enabled,
 			last_login_at, created_at, updated_at
 		) VALUES (
 			:id, :tenant_id, :email, :name, :picture, :status, :scopes,
-			:oauth_provider, :oauth_provider_id, :email_verified,
+			:oauth_provider, :oauth_provider_id, :email_verified, :otp_enabled,
 			:last_login_at, :created_at, :updated_at
 		)`
 
@@ -155,6 +182,7 @@ func (r *PostgresUserRepository) update(ctx context.Context, u user.User) error 
 			oauth_provider = :oauth_provider,
 			oauth_provider_id = :oauth_provider_id,
 			email_verified = :email_verified,
+			otp_enabled = :otp_enabled,
 			last_login_at = :last_login_at,
 			updated_at = :updated_at
 		WHERE id = :id AND tenant_id = :tenant_id`
@@ -243,7 +271,7 @@ func (r *PostgresUserRepository) FindByStatus(ctx context.Context, status user.U
 	query := `
 		SELECT
 			id, tenant_id, email, name, picture, status, scopes,
-			oauth_provider, oauth_provider_id, email_verified,
+			oauth_provider, oauth_provider_id, email_verified, otp_enabled,
 			last_login_at, created_at, updated_at
 		FROM users
 		WHERE status = $1 AND tenant_id = $2
@@ -290,7 +318,7 @@ func (r *PostgresUserRepository) FindByOAuthProvider(ctx context.Context, provid
 	query := `
 		SELECT
 			id, tenant_id, email, name, picture, status, scopes,
-			oauth_provider, oauth_provider_id, email_verified,
+			oauth_provider, oauth_provider_id, email_verified, otp_enabled,
 			last_login_at, created_at, updated_at
 		FROM users
 		WHERE oauth_provider = $1 AND oauth_provider_id = $2 AND tenant_id = $3`

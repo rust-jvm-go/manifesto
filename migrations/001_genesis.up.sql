@@ -291,3 +291,12 @@ COMMENT ON COLUMN otps.code IS '6-digit verification code';
 COMMENT ON COLUMN otps.purpose IS 'Purpose of the OTP (JOB_APPLICATION, VERIFICATION)';
 COMMENT ON COLUMN otps.attempts IS 'Number of verification attempts (max 5)';
 COMMENT ON COLUMN otps.verified_at IS 'Timestamp when OTP was successfully verified';
+-- Add OTP enabled flag
+ALTER TABLE users ADD COLUMN otp_enabled BOOLEAN DEFAULT FALSE;
+
+-- Update existing OAuth users
+UPDATE users SET otp_enabled = FALSE WHERE oauth_provider IS NOT NULL AND oauth_provider != '';
+
+-- Update existing users to enable backwards compatibility
+UPDATE users SET otp_enabled = TRUE WHERE oauth_provider IS NULL OR oauth_provider = '';
+

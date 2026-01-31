@@ -26,20 +26,57 @@ const (
 )
 
 // User es la entidad rica que representa a un usuario en el sistema
+// User entity
 type User struct {
-	ID              kernel.UserID     `db:"id" json:"id"`
-	TenantID        kernel.TenantID   `db:"tenant_id" json:"tenant_id"`
-	Email           string            `db:"email" json:"email"`
-	Name            string            `db:"name" json:"name"`
-	Picture         *string           `db:"picture" json:"picture,omitempty"`
-	Status          UserStatus        `db:"status" json:"status"`
-	Scopes          []string          `db:"scopes" json:"scopes"` // Scope-based permissions
+	ID       kernel.UserID   `db:"id" json:"id"`
+	TenantID kernel.TenantID `db:"tenant_id" json:"tenant_id"`
+	Email    string          `db:"email" json:"email"`
+	Name     string          `db:"name" json:"name"`
+	Picture  *string         `db:"picture" json:"picture,omitempty"`
+
+	// Authentication methods (can have multiple)
 	OAuthProvider   iam.OAuthProvider `db:"oauth_provider" json:"oauth_provider"`
 	OAuthProviderID string            `db:"oauth_provider_id" json:"oauth_provider_id"`
-	EmailVerified   bool              `db:"email_verified" json:"email_verified"`
-	LastLoginAt     *time.Time        `db:"last_login_at" json:"last_login_at,omitempty"`
-	CreatedAt       time.Time         `db:"created_at" json:"created_at"`
-	UpdatedAt       time.Time         `db:"updated_at" json:"updated_at"`
+	OTPEnabled      bool              `db:"otp_enabled" json:"otp_enabled"` // NEW: Track if OTP is enabled
+
+	Status        UserStatus `db:"status" json:"status"`
+	Scopes        []string   `db:"scopes" json:"scopes"`
+	EmailVerified bool       `db:"email_verified" json:"email_verified"`
+	LastLoginAt   *time.Time `db:"last_login_at" json:"last_login_at,omitempty"`
+	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time  `db:"updated_at" json:"updated_at"`
+}
+
+// Domain methods
+func (u *User) HasOAuth() bool {
+	return u.OAuthProvider != "" && u.OAuthProviderID != ""
+}
+
+func (u *User) HasOTP() bool {
+	return u.OTPEnabled
+}
+
+func (u *User) HasMultipleAuthMethods() bool {
+	return u.HasOAuth() && u.HasOTP()
+}
+
+func (u *User) CanLoginWithOAuth() bool {
+	return u.HasOAuth() && u.IsActive()
+}
+
+func (u *User) CanLoginWithOTP() bool {
+	return u.HasOTP() && u.IsActive() && u.EmailVerified
+}
+
+func (u *User) EnableOTP() {
+	u.OTPEnabled = true
+	u.UpdatedAt = time.Now()
+}
+
+func (u *User) LinkOAuth(provider iam.OAuthProvider, providerID string) {
+	u.OAuthProvider = provider
+	u.OAuthProviderID = providerID
+	u.UpdatedAt = time.Now()
 }
 
 // ============================================================================

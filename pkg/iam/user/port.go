@@ -14,6 +14,7 @@ type UserRepository interface {
 	Save(ctx context.Context, u User) error
 	Delete(ctx context.Context, id kernel.UserID, tenantID kernel.TenantID) error
 	ExistsByEmail(ctx context.Context, email string, tenantID kernel.TenantID) (bool, error)
+	FindByEmailAcrossTenants(ctx context.Context, email string) ([]*User, error)
 }
 
 // PasswordService define el contrato para el manejo de contraseñas

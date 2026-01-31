@@ -42,7 +42,6 @@ func NewAuthHandlers(
 	stateManager StateManager,
 	invitationRepo invitation.InvitationRepository,
 	config *config.Config,
-
 ) *AuthHandlers {
 	return &AuthHandlers{
 		oauthServices:  oauthServices,
@@ -84,7 +83,6 @@ type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// RegisterRoutes registra las rutas de autenticación en Fiber
 // RegisterRoutes registers the auth routes on Fiber
 func (ah *AuthHandlers) RegisterRoutes(router fiber.Router) {
 	auth := router.Group("/auth")
@@ -266,18 +264,14 @@ func (ah *AuthHandlers) HandleCallback(c *fiber.Ctx) error {
 
 	if err := ah.sessionRepo.SaveSession(c.Context(), session); err != nil {
 		// Log error pero no fallar la autenticación
-		// logger.Error("Failed to save session", err)
 	}
 
 	// Actualizar último login del usuario
 	userEntity.UpdateLastLogin()
 	if err := ah.userRepo.Save(c.Context(), *userEntity); err != nil {
 		// Log error pero no fallar
-		// logger.Error("Failed to update user last login", err)
 	}
 
-	// En desarrollo, puedes devolver JSON directamente
-	// En producción, probablemente quieras hacer redirect con los tokens en cookies o URL
 	response := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshTokenStr,
@@ -287,7 +281,7 @@ func (ah *AuthHandlers) HandleCallback(c *fiber.Ctx) error {
 		Tenant:       tenantEntity.ToDTO(),
 	}
 
-	// Opcional: Set cookies for browser-based apps
+	// Set cookies for browser-based apps
 	c.Cookie(&fiber.Cookie{
 		Name:     ah.config.Auth.Cookie.AccessTokenName,
 		Value:    accessToken,
@@ -396,7 +390,7 @@ func (ah *AuthHandlers) RefreshToken(c *fiber.Ctx) error {
 		Value:    accessToken,
 		Expires:  time.Now().Add(15 * time.Minute),
 		HTTPOnly: true,
-		Secure:   true, // Set to true in production with HTTPS
+		Secure:   true,
 		SameSite: "Lax",
 	})
 
@@ -412,7 +406,7 @@ func (ah *AuthHandlers) Logout(c *fiber.Ctx) error {
 	// Intentar obtener contexto de auth del middleware
 	authContext, ok := GetAuthContext(c)
 	if !ok {
-		// Fallback: intentar decodificar el token desde Authorization o cookie
+		// Fallback: intentar decodificar el token
 		var token string
 		authHeader := c.Get("Authorization")
 		if authHeader != "" {
@@ -435,7 +429,6 @@ func (ah *AuthHandlers) Logout(c *fiber.Ctx) error {
 				"error": iam.ErrUnauthorized().Error(),
 			})
 		}
-		// Construir contexto de autenticación a partir de los claims
 		authContext = &kernel.AuthContext{
 			UserID:   &claims.UserID,
 			TenantID: claims.TenantID,
@@ -453,13 +446,11 @@ func (ah *AuthHandlers) Logout(c *fiber.Ctx) error {
 	// Revocar todos los refresh tokens del usuario
 	if err := ah.tokenRepo.RevokeAllUserTokens(c.Context(), *authContext.UserID); err != nil {
 		// Log error pero no fallar
-		// logger.Error("Failed to revoke user tokens", err)
 	}
 
 	// Revocar todas las sesiones del usuario
 	if err := ah.sessionRepo.RevokeAllUserSessions(c.Context(), *authContext.UserID); err != nil {
 		// Log error pero no fallar
-		// logger.Error("Failed to revoke user sessions", err)
 	}
 
 	// Clear cookies
@@ -486,7 +477,7 @@ func (ah *AuthHandlers) Logout(c *fiber.Ctx) error {
 func (ah *AuthHandlers) GetCurrentUser(c *fiber.Ctx) error {
 	authContext, ok := GetAuthContext(c)
 	if !ok {
-		// Fallback: intentar decodificar el token desde Authorization o cookie
+		// Fallback: intentar decodificar el token
 		var token string
 		authHeader := c.Get("Authorization")
 		if authHeader != "" {
@@ -545,12 +536,11 @@ func (ah *AuthHandlers) GetCurrentUser(c *fiber.Ctx) error {
 	})
 }
 
-// findOrCreateUser busca o crea un usuario basado en la información OAuth
-// findOrCreateUser busca o crea un usuario basado en la información OAuth
+// 🔥 findOrCreateUser WITH ACCOUNT LINKING
 func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUserInfo, provider iam.OAuthProvider, stateData map[string]interface{}) (*user.User, *tenant.Tenant, error) {
 	var tenantEntity *tenant.Tenant
 	var invitationToken string
-	var invitationScopes []string // ✅ Add this to store invitation scopes
+	var invitationScopes []string
 	var err error
 
 	// Verificar si hay un token de invitación
@@ -565,7 +555,6 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 			return nil, nil, errx.New("invalid invitation token", errx.TypeBusiness)
 		}
 
-		// Verificar que la invitación es válida
 		if !inv.CanBeAccepted() {
 			if inv.IsExpired() {
 				return nil, nil, errx.New("invitation expired", errx.TypeBusiness)
@@ -573,32 +562,26 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 			return nil, nil, errx.New("invitation not valid", errx.TypeBusiness)
 		}
 
-		// Verificar que el email coincide con la invitación
 		if inv.GetEmail() != userInfo.Email {
 			return nil, nil, errx.New("email does not match invitation", errx.TypeBusiness)
 		}
 
-		// ✅ Store invitation scopes
 		invitationScopes = inv.GetScopes()
 
-		// Obtener el tenant de la invitación
 		tenantEntity, err = ah.tenantRepo.FindByID(ctx, inv.GetTenantID())
 		if err != nil {
 			return nil, nil, tenant.ErrTenantNotFound()
 		}
 	} else {
-		// Sin invitación: denegar acceso
-		// En producción, NO PERMITIR registro sin invitación
 		return nil, nil, errx.New("invitation required for registration", errx.TypeAuthorization)
 	}
 
-	// Buscar usuario existente
+	// 🔥 ACCOUNT LINKING: Buscar usuario existente
 	existingUser, err := ah.userRepo.FindByEmail(ctx, userInfo.Email, tenantEntity.ID)
 	if err == nil {
-		// Usuario existe, actualizar información OAuth si es necesario
+		// Usuario existe - link OAuth if not already linked
 		if existingUser.OAuthProvider != provider || existingUser.OAuthProviderID != userInfo.ID {
-			existingUser.OAuthProvider = provider
-			existingUser.OAuthProviderID = userInfo.ID
+			existingUser.LinkOAuth(provider, userInfo.ID)
 			existingUser.UpdateProfile(userInfo.Name, userInfo.Picture)
 
 			if err := ah.userRepo.Save(ctx, *existingUser); err != nil {
@@ -613,16 +596,13 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 		return nil, nil, tenant.ErrMaxUsersReached()
 	}
 
-	// ✅ Determine scopes: use invitation scopes if available, otherwise use defaults
+	// Determine scopes
 	var userScopes []string
 	if len(invitationScopes) > 0 {
-		// Use scopes from invitation
 		userScopes = invitationScopes
 	} else {
-		// Fallback: usar scopes básicos por defecto (viewer role)
 		userScopes = scopes.GetScopesByGroup("viewer")
 		if len(userScopes) == 0 {
-			// Final fallback a scopes muy básicos
 			userScopes = []string{
 				scopes.ScopeUsersRead,
 				scopes.ScopeJobsRead,
@@ -632,7 +612,7 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 		}
 	}
 
-	// Crear nuevo usuario
+	// 🔥 Crear nuevo usuario con OAuth (OTPEnabled = false por defecto)
 	newUser := &user.User{
 		ID:              kernel.NewUserID(generateID()),
 		TenantID:        tenantEntity.ID,
@@ -640,9 +620,10 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 		Name:            userInfo.Name,
 		Picture:         ptrx.String(userInfo.Picture),
 		Status:          user.UserStatusActive,
-		Scopes:          userScopes, // ✅ Use determined scopes
+		Scopes:          userScopes,
 		OAuthProvider:   provider,
 		OAuthProviderID: userInfo.ID,
+		OTPEnabled:      false, // 🔥 OAuth users don't have OTP by default
 		EmailVerified:   userInfo.EmailVerified,
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
@@ -655,7 +636,6 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 
 	// Incrementar contador de usuarios del tenant
 	if err := tenantEntity.AddUser(); err != nil {
-		// Intentar limpiar el usuario creado
 		ah.userRepo.Delete(ctx, newUser.ID, tenantEntity.ID)
 		return nil, nil, err
 	}
@@ -663,19 +643,15 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 	// Guardar tenant actualizado
 	if err := ah.tenantRepo.Save(ctx, *tenantEntity); err != nil {
 		// Log error pero no fallar
-		// logger.Error("Failed to update tenant user count", err)
 	}
 
-	// ✅ Accept the invitation and assign scopes (replaces the old TODO)
+	// Accept the invitation
 	if invitationToken != "" {
 		inv, err := ah.invitationRepo.FindByToken(ctx, invitationToken)
 		if err == nil {
-			// Aceptar la invitación
 			if err := inv.Accept(newUser.ID); err == nil {
-				// Guardar invitación actualizada
 				ah.invitationRepo.Save(ctx, *inv)
 			}
-			// Note: Scopes are already assigned to the user above from invitationScopes
 		}
 	}
 
@@ -684,6 +660,5 @@ func (ah *AuthHandlers) findOrCreateUser(ctx context.Context, userInfo *OAuthUse
 
 // Helper functions
 func generateID() string {
-	// Implementar generación de ID único (UUID, nanoid, etc.)
 	return uuid.NewString()
 }
