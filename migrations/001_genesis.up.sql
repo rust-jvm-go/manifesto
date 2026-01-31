@@ -303,3 +303,14 @@ UPDATE users SET otp_enabled = TRUE WHERE oauth_provider IS NULL OR oauth_provid
 -- Remove the restrictive constraint
 ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_oauth_provider;
 
+
+
+
+-- Add max_attempts column
+ALTER TABLE otps ADD COLUMN max_attempts INTEGER DEFAULT 5;
+
+-- Update existing OTPs
+UPDATE otps SET max_attempts = 5 WHERE max_attempts IS NULL OR max_attempts = 0;
+
+-- Make it NOT NULL
+ALTER TABLE otps ALTER COLUMN max_attempts SET NOT NULL;

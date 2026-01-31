@@ -3,6 +3,7 @@ package otpinfra
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/Abraxas-365/manifesto/pkg/errx"
@@ -21,8 +22,8 @@ func NewPostgresOTPRepository(db *sqlx.DB) *PostgresOTPRepository {
 // Create inserts a new OTP into the database
 func (r *PostgresOTPRepository) Create(ctx context.Context, o *otp.OTP) error {
 	query := `
-        INSERT INTO otps (id, contact, code, purpose, expires_at, attempts, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO otps (id, contact, code, purpose, expires_at, attempts, max_attempts, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `
 
 	_, err := r.db.ExecContext(
@@ -34,6 +35,7 @@ func (r *PostgresOTPRepository) Create(ctx context.Context, o *otp.OTP) error {
 		string(o.Purpose),
 		o.ExpiresAt,
 		o.Attempts,
+		o.MaxAttempts, // ✅ Added
 		o.CreatedAt,
 		time.Now(),
 	)
@@ -48,12 +50,17 @@ func (r *PostgresOTPRepository) Create(ctx context.Context, o *otp.OTP) error {
 // GetByContactAndCode retrieves an OTP by contact and code
 func (r *PostgresOTPRepository) GetByContactAndCode(ctx context.Context, contact string, code string) (*otp.OTP, error) {
 	query := `
-        SELECT id, contact, code, purpose, expires_at, verified_at, attempts, created_at
+        SELECT id, contact, code, purpose, expires_at, verified_at, attempts, max_attempts, created_at
         FROM otps
         WHERE contact = $1 AND code = $2
         ORDER BY created_at DESC
         LIMIT 1
     `
+
+	// 🔍 DEBUG
+	fmt.Printf("🔍 DEBUG GetByContactAndCode:\n")
+	fmt.Printf("   Contact: '%s' (len=%d)\n", contact, len(contact))
+	fmt.Printf("   Code: '%s' (len=%d)\n", code, len(code))
 
 	var o otp.OTP
 	var verifiedAt sql.NullTime
@@ -67,15 +74,27 @@ func (r *PostgresOTPRepository) GetByContactAndCode(ctx context.Context, contact
 		&o.ExpiresAt,
 		&verifiedAt,
 		&o.Attempts,
+		&o.MaxAttempts, // ✅ Added
 		&o.CreatedAt,
 	)
 
 	if err == sql.ErrNoRows {
+		fmt.Printf("   ❌ No OTP found in database\n")
 		return nil, otp.ErrInvalidOTP()
 	}
 	if err != nil {
+		fmt.Printf("   ❌ Query error: %v\n", err)
 		return nil, errx.Wrap(err, "failed to get OTP", errx.TypeInternal)
 	}
+
+	fmt.Printf("   ✅ OTP found:\n")
+	fmt.Printf("      ID: %s\n", o.ID)
+	fmt.Printf("      Code: '%s' (len=%d)\n", o.Code, len(o.Code))
+	fmt.Printf("      Contact: '%s'\n", o.Contact)
+	fmt.Printf("      MaxAttempts: %d\n", o.MaxAttempts)
+	fmt.Printf("      Attempts: %d\n", o.Attempts)
+	fmt.Printf("      ExpiresAt: %s\n", o.ExpiresAt)
+	fmt.Printf("      VerifiedAt: %v\n", verifiedAt)
 
 	o.Purpose = otp.OTPPurpose(purposeStr)
 	if verifiedAt.Valid {
@@ -88,7 +107,7 @@ func (r *PostgresOTPRepository) GetByContactAndCode(ctx context.Context, contact
 // GetLatestByContact retrieves the most recent OTP for a contact and purpose
 func (r *PostgresOTPRepository) GetLatestByContact(ctx context.Context, contact string, purpose otp.OTPPurpose) (*otp.OTP, error) {
 	query := `
-        SELECT id, contact, code, purpose, expires_at, verified_at, attempts, created_at
+        SELECT id, contact, code, purpose, expires_at, verified_at, attempts, max_attempts, created_at
         FROM otps
         WHERE contact = $1 AND purpose = $2
         ORDER BY created_at DESC
@@ -107,6 +126,7 @@ func (r *PostgresOTPRepository) GetLatestByContact(ctx context.Context, contact 
 		&o.ExpiresAt,
 		&verifiedAt,
 		&o.Attempts,
+		&o.MaxAttempts, // ✅ Added
 		&o.CreatedAt,
 	)
 
@@ -177,4 +197,3 @@ func (r *PostgresOTPRepository) DeleteExpired(ctx context.Context) error {
 
 	return nil
 }
-
