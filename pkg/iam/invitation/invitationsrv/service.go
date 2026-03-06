@@ -17,10 +17,11 @@ import (
 
 // InvitationService proporciona operaciones de negocio para invitaciones
 type InvitationService struct {
-	invitationRepo invitation.InvitationRepository
-	userRepo       user.UserRepository
-	tenantRepo     tenant.TenantRepository
-	config         *config.InvitationConfig
+	invitationRepo      invitation.InvitationRepository
+	userRepo            user.UserRepository
+	tenantRepo          tenant.TenantRepository
+	notificationService invitation.NotificationService
+	config              *config.InvitationConfig
 }
 
 // NewInvitationService crea una nueva instancia del servicio de invitaciones
@@ -28,13 +29,15 @@ func NewInvitationService(
 	invitationRepo invitation.InvitationRepository,
 	userRepo user.UserRepository,
 	tenantRepo tenant.TenantRepository,
+	notificationService invitation.NotificationService,
 	cfg *config.InvitationConfig,
 ) *InvitationService {
 	return &InvitationService{
-		invitationRepo: invitationRepo,
-		userRepo:       userRepo,
-		tenantRepo:     tenantRepo,
-		config:         cfg,
+		invitationRepo:      invitationRepo,
+		userRepo:            userRepo,
+		tenantRepo:          tenantRepo,
+		notificationService: notificationService,
+		config:              cfg,
 	}
 }
 
@@ -121,8 +124,11 @@ func (s *InvitationService) CreateInvitation(ctx context.Context, tenantID kerne
 		return nil, errx.Wrap(err, "failed to save invitation", errx.TypeInternal)
 	}
 
-	// TODO: Aquí deberías enviar un email con el link de invitación
-	// Por ejemplo: https://yourapp.com/accept-invitation?token={token}
+	if s.notificationService != nil {
+		if err := s.notificationService.SendInvitation(ctx, req.Email, token, tenantID, invitedBy); err != nil {
+			return nil, errx.Wrap(err, "failed to send invitation email", errx.TypeExternal)
+		}
+	}
 
 	return newInvitation, nil
 }

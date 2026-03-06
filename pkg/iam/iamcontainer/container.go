@@ -11,6 +11,7 @@ import (
 	"github.com/Abraxas-365/manifesto/pkg/iam/apikey/apikeysrv"
 	"github.com/Abraxas-365/manifesto/pkg/iam/auth"
 	"github.com/Abraxas-365/manifesto/pkg/iam/auth/authinfra"
+	"github.com/Abraxas-365/manifesto/pkg/iam/invitation"
 	"github.com/Abraxas-365/manifesto/pkg/iam/invitation/invitationapi"
 	"github.com/Abraxas-365/manifesto/pkg/iam/invitation/invitationinfra"
 	"github.com/Abraxas-365/manifesto/pkg/iam/invitation/invitationsrv"
@@ -39,6 +40,10 @@ type Deps struct {
 	// OTPNotifier is a cross-context dependency injected as an interface so the
 	// IAM module has zero knowledge of the concrete notification implementation.
 	OTPNotifier otp.NotificationService
+
+	// InvitationNotifier sends invitation emails when new invitations are created.
+	// If nil, no emails are sent (invitations are still created).
+	InvitationNotifier invitation.NotificationService
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +139,7 @@ func New(deps Deps) *Container {
 		invitationRepo,
 		userRepo,
 		tenantRepo,
+		deps.InvitationNotifier,
 		&deps.Cfg.Auth.Invitation,
 	)
 

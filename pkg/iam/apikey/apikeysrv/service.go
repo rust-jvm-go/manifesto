@@ -6,6 +6,7 @@ import (
 
 	"github.com/Abraxas-365/manifesto/pkg/errx"
 	"github.com/Abraxas-365/manifesto/pkg/iam/apikey"
+	"github.com/Abraxas-365/manifesto/pkg/iam/scopes"
 	"github.com/Abraxas-365/manifesto/pkg/iam/tenant"
 	"github.com/Abraxas-365/manifesto/pkg/iam/user"
 	"github.com/Abraxas-365/manifesto/pkg/kernel"
@@ -54,6 +55,10 @@ func (s *APIKeyService) CreateAPIKey(
 		if err != nil {
 			return nil, user.ErrUserNotFound()
 		}
+	}
+
+	if err := s.validateScopes(req.Scopes); err != nil {
+		return nil, err
 	}
 
 	var prefix string
@@ -152,6 +157,9 @@ func (s *APIKeyService) UpdateAPIKey(
 		key.Description = *req.Description
 	}
 	if req.Scopes != nil {
+		if err := s.validateScopes(req.Scopes); err != nil {
+			return nil, err
+		}
 		key.Scopes = req.Scopes
 	}
 	if req.IsActive != nil {
@@ -192,6 +200,27 @@ func (s *APIKeyService) DeleteAPIKey(
 	}
 
 	return s.apiKeyRepo.Delete(ctx, keyID, tenantID)
+}
+
+func (s *APIKeyService) validateScopes(scopesList []string) error {
+	if len(scopesList) == 0 {
+		return errx.New("at least one scope is required", errx.TypeValidation)
+	}
+
+	var invalidScopes []string
+	for _, scope := range scopesList {
+		if !scopes.ValidateScope(scope) {
+			invalidScopes = append(invalidScopes, scope)
+		}
+	}
+
+	if len(invalidScopes) > 0 {
+		return apikey.ErrAPIKeyInvalidScopes().
+			WithDetail("invalid_scopes", invalidScopes).
+			WithDetail("hint", "Use scopes.GetAllScopes() to see valid options")
+	}
+
+	return nil
 }
 
 func (s *APIKeyService) ValidateAPIKey(

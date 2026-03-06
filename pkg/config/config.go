@@ -9,10 +9,13 @@ import (
 )
 
 type Config struct {
-	Server      ServerConfig
-	Database    DatabaseConfig
-	Redis       RedisConfig
-	Environment Environment
+	Server       ServerConfig
+	Database     DatabaseConfig
+	Redis        RedisConfig
+	Environment  Environment
+	Auth         AuthConfig
+	OAuth        OAuthConfig
+	TenantConfig TenantConfig
 }
 
 type Environment string
@@ -47,10 +50,13 @@ func loadEnvironment() Environment {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Server:      loadServerConfig(),
-		Database:    loadDatabaseConfig(),
-		Redis:       loadRedisConfig(),
-		Environment: loadEnvironment(),
+		Server:       loadServerConfig(),
+		Database:     loadDatabaseConfig(),
+		Redis:        loadRedisConfig(),
+		Environment:  loadEnvironment(),
+		Auth:         loadAuthConfig(),
+		OAuth:        loadOAuthConfig(),
+		TenantConfig: loadTenantConfig(),
 	}
 
 	if err := cfg.Validate(); err != nil {

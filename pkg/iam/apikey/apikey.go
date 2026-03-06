@@ -183,6 +183,7 @@ var (
 	CodeAPIKeyExpired           = ErrRegistry.Register("EXPIRED", errx.TypeAuthorization, http.StatusUnauthorized, "API key expired")
 	CodeAPIKeyRevoked           = ErrRegistry.Register("REVOKED", errx.TypeAuthorization, http.StatusUnauthorized, "API key revoked")
 	CodeAPIKeyInsufficientScope = ErrRegistry.Register("INSUFFICIENT_SCOPE", errx.TypeAuthorization, http.StatusForbidden, "API key does not have required scope")
+	CodeAPIKeyInvalidScopes     = ErrRegistry.Register("INVALID_SCOPES", errx.TypeValidation, http.StatusBadRequest, "Invalid scopes provided")
 )
 
 func ErrAPIKeyNotFound() *errx.Error {
@@ -203,4 +204,8 @@ func ErrAPIKeyRevoked() *errx.Error {
 
 func ErrAPIKeyInsufficientScope() *errx.Error {
 	return ErrRegistry.New(CodeAPIKeyInsufficientScope)
+}
+
+func ErrAPIKeyInvalidScopes() *errx.Error {
+	return ErrRegistry.New(CodeAPIKeyInvalidScopes)
 }

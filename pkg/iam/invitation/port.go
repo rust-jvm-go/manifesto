@@ -6,6 +6,12 @@ import (
 	"github.com/Abraxas-365/manifesto/pkg/kernel"
 )
 
+// NotificationService is a generic interface for sending invitation emails.
+// Implementations can use notifx, console logging, or any other delivery mechanism.
+type NotificationService interface {
+	SendInvitation(ctx context.Context, email string, token string, tenantID kernel.TenantID, invitedBy kernel.UserID) error
+}
+
 // InvitationRepository define el contrato para la persistencia de invitaciones
 type InvitationRepository interface {
 	// FindByID busca una invitación por ID
