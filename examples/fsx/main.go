@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Abraxas-365/manifesto/pkg/fsx"
-	"github.com/Abraxas-365/manifesto/pkg/fsx/fsxlocal"
+	"github.com/Abraxas-365/manifesto/internal/fsx"
+	"github.com/Abraxas-365/manifesto/internal/fsx/fsxlocal"
 )
 
 func main() {

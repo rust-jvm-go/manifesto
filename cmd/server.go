@@ -8,9 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Abraxas-365/manifesto/pkg/config"
-	"github.com/Abraxas-365/manifesto/pkg/errx"
-	"github.com/Abraxas-365/manifesto/pkg/logx"
+	"github.com/Abraxas-365/manifesto/internal/config"
+	"github.com/Abraxas-365/manifesto/internal/errx"
+	"github.com/Abraxas-365/manifesto/internal/logx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"

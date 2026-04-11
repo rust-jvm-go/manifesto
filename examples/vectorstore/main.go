@@ -7,13 +7,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Abraxas-365/manifesto/pkg/ai/document"
-	"github.com/Abraxas-365/manifesto/pkg/ai/embedding"
-	"github.com/Abraxas-365/manifesto/pkg/ai/llm"
-	"github.com/Abraxas-365/manifesto/pkg/ai/providers/aiopenai"
-	"github.com/Abraxas-365/manifesto/pkg/ai/vstore"
-	"github.com/Abraxas-365/manifesto/pkg/ai/vstore/providers/vstmemory"
-	"github.com/Abraxas-365/manifesto/pkg/fsx/fsxlocal"
+	"github.com/Abraxas-365/manifesto/internal/ai/document"
+	"github.com/Abraxas-365/manifesto/internal/ai/embedding"
+	"github.com/Abraxas-365/manifesto/internal/ai/llm"
+	"github.com/Abraxas-365/manifesto/internal/ai/providers/aiopenai"
+	"github.com/Abraxas-365/manifesto/internal/ai/vstore"
+	"github.com/Abraxas-365/manifesto/internal/ai/vstore/providers/vstmemory"
+	"github.com/Abraxas-365/manifesto/internal/fsx/fsxlocal"
 )
 
 func main() {

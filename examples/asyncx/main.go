@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Abraxas-365/manifesto/pkg/asyncx"
+	"github.com/Abraxas-365/manifesto/internal/asyncx"
 )
 
 func main() {
