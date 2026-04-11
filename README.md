@@ -31,7 +31,7 @@ manifesto init myapp --module github.com/me/myapp --all
 
 ```bash
 cd myapp
-manifesto add pkg/recruitment/candidate
+manifesto add internal/recruitment/candidate
 ```
 
 **3. Verify the setup:**
@@ -111,7 +111,7 @@ type Tenant struct {
 
 ## 3. **Type Safety Through Value Objects**
 
-### The `pkg/kernel` Package
+### The `internal/kernel` Package
 
 Instead of passing `string` everywhere, we use **strongly-typed domain primitives**:
 
@@ -196,7 +196,7 @@ Create a separate domain that represents the **relationship** between entities:
 package application
 
 import (
-    "yourapp/pkg/kernel"
+    "yourapp/internal/kernel"
     "time"
 )
 
@@ -393,7 +393,7 @@ func (s *ApplicationService) WithdrawApplication(
 ### Example Pattern:
 
 ```go
-// pkg/iam/user/usersrv/service.go
+// internal/iam/user/usersrv/service.go
 package usersrv
 
 // Simple service with no UoW — only needed when the service
@@ -446,7 +446,7 @@ func (s *UserService) CreateUser(ctx context.Context, req CreateUserRequest) err
 ### The Solution: Unit of Work Interface
 
 ```go
-// pkg/kernel/uow.go
+// internal/kernel/uow.go
 package kernel
 
 import "context"
@@ -485,7 +485,7 @@ func WithTransaction(ctx context.Context, uow UnitOfWork, fn func(context.Contex
 ### Infrastructure Implementation
 
 ```go
-// pkg/iam/iaminfra/uow.go
+// internal/iam/iaminfra/uow.go
 type PostgresUnitOfWork struct {
     db *sqlx.DB
 }
@@ -670,7 +670,7 @@ type Candidate struct {
 
 ## 9. **Error Handling: Rich, Structured Errors**
 
-### The `pkg/errx` Package
+### The `internal/errx` Package
 
 We reject generic `error` in favor of **rich error types** with context:
 
@@ -787,19 +787,19 @@ func (am *UnifiedAuthMiddleware) Authenticate() fiber.Handler {
 
 ## 13. **Reusable Packages: Build Once, Use Everywhere**
 
-### `pkg/errx` — Error Handling
+### `internal/errx` — Error Handling
 * Type-safe error creation, HTTP status mapping, error registries per module
 
-### `pkg/logx` — Logging
+### `internal/logx` — Logging
 * Rust-inspired colored console output, JSON/CloudWatch formatters, structured logging
 
-### `pkg/fsx` — File System Abstraction
+### `internal/fsx` — File System Abstraction
 * Interface-based (works with S3, local FS), context-aware operations
 
-### `pkg/ptrx` — Pointer Utilities
+### `internal/ptrx` — Pointer Utilities
 * Generic `Value[T]` and `ValueOr[T]`, type-safe nullable fields
 
-### `pkg/kernel` — Domain Primitives
+### `internal/kernel` — Domain Primitives
 * Shared value objects (`UserID`, `TenantID`), `AuthContext`, `Paginated[T]`, and optionally `UnitOfWork` for services that need transactions
 
 ---
@@ -853,7 +853,7 @@ func NewUserService(
 ## 16. **Package Organization: Domain-Centric**
 
 ```
-pkg/
+internal/
 ├── kernel/           # Shared domain primitives
 ├── errx/             # Error handling framework
 ├── logx/             # Logging framework
